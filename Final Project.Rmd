@@ -1,0 +1,16 @@
+---
+title: "STAT432 final project"
+output: pdf_document
+author: Yijun Zhao (yijunz3), (peiyic2), (rni4)
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Readin the Data
+
+```{r}
+brca = read.csv("brca_data_w_subtypes.csv")
+```
+
