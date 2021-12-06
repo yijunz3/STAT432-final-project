@@ -1,7 +1,7 @@
 ---
 title: "STAT432 final project"
 output: pdf_document
-author: Yijun Zhao (yijunz3), (peiyic2), (rni4)
+author: Yijun Zhao (yijunz3), Peiyi Chen (peiyic2), Rongxin Ni (rni4)
 ---
 
 ```{r setup, include=FALSE}
@@ -11,6 +11,117 @@ knitr::opts_chunk$set(echo = TRUE)
 ## Readin the Data
 
 ```{r}
-brca = read.csv("brca_data_w_subtypes.csv")
+  dataset = read.csv("brca_data_w_subtypes.csv")
+  dataset
 ```
 
+```{r}
+  dim(dataset)
+  # discard the vital.status variable
+  train_data = subset(dataset, select = c(-vital.status))
+  # separate outcomes from the training variables
+  train_data_x = subset(train_data, select = c(-PR.Status, -ER.Status, 
+                                               -HER2.Final.Status, 
+                                               -histological.type))
+  dim(train_data_x)
+```
+
+## Summary Statistics and data processing
+
+```{r}
+  # Provide a summary of your data using univariate analysis
+
+  # For continuous predictors, is there any outlier/missing value? Do you need to do any transformations?
+
+  # For categorical predictors, do you need to deal with variables that are extremely unbalanced?
+
+  # Any variable/observation you decided to remove from the analysis? And for what reason?
+
+  # You need to provide tables and/or figures to properly display the information to support your decision and clearly document your processing steps.
+
+```
+
+## Build a classification model to predict PR.Status. 
+
+```{r}
+  # preprocess by outcome value
+  idxes = which(train_data$PR.Status %in% c("Positive", "Negative"))
+  PR.Status_train_data_x = train_data_x[idxes, ] 
+  PR.Status_train_data_y = train_data$PR.Status[idxes]
+  # positive = 1, negative = 0
+  PR.Status_train_data_y = as.factor(PR.Status_train_data_y)
+  PR.Status_train_data_y = as.numeric(PR.Status_train_data_y) - 1
+  dim(PR.Status_train_data_x)
+  length(PR.Status_train_data_y)
+  
+  ## Approach 1
+
+  # Use classification error as the evaluation criterion.
+
+  # You need to provide sufficient information (table, figure and descriptions) to demonstrate the model fitting results
+
+
+  ## Approach 2
+
+  # Use classification error as the evaluation criterion.
+
+  # You need to provide sufficient information (table, figure and descriptions) to demonstrate the model fitting results
+
+```
+
+## Build a classification model to predict histological.type 
+
+```{r}
+  # preprocess by outcome value
+  idxes = which(train_data$histological.type %in% c("infiltrating lobular carcinoma", 
+                                                      "infiltrating ductal carcinoma"))
+  histological.type_train_data_x = train_data_x[idxes, ] 
+  histological.type_train_data_y = train_data$histological.type[idxes]
+  # infiltrating lobular carcinoma = 1, infiltrating ductal carcinoma = 0
+  histological.type_train_data_y = as.factor(histological.type_train_data_y)
+  histological.type_train_data_y = as.numeric(histological.type_train_data_y) - 1
+  dim(histological.type_train_data_x)
+  length(histological.type_train_data_y)
+  
+  ## Approach 1 (should be different from the PR.Status models)
+
+  # Use AUC as the evaluation criterion.
+  
+  # You need to provide sufficient information (table, figure and descriptions) to demonstrate the model fitting results
+
+
+  ## Approach 2 (should be different from the PR.Status models)
+
+  # Use AUC as the evaluation criterion.
+  
+  # You need to provide sufficient information (table, figure and descriptions) to demonstrate the model fitting results
+
+```
+
+## Variable selection for all outcomes
+
+```{r}
+  # preprocess by outcome value
+
+  # select a total of 50 variables (You can consider reading relevant papers for this task and help guide your variable selection procedure. This means that your final model does not need to be completely data driven. It can be partially knowledge driven. If you do so, please clearly document your procedure, and you should also mention them in the literature review.)
+
+  # build models using only these variables to predict all four outcomes
+  
+  ## PR.Status
+
+
+  ## ER.Status
+
+
+  ## HER2.Final.Status
+
+
+  ## histological.type
+
+
+  # evaluation criteria is based on a three-fold cross-validation with AUC for each outcome, and then average the cross-validated AUC of all four outcomes
+  
+  # must generate the fold ID (for all 705 observations) using the following code
+  # set.seed(1); sample(1:3, 705, replace = TRUE)
+
+```
