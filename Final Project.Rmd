@@ -29,6 +29,7 @@ knitr::opts_chunk$set(echo = TRUE)
                                                histological.type))
   dim(data_x)
   dim(data_y)
+  data_y
 ```
 
 ## Summary Statistics and data processing
@@ -94,30 +95,29 @@ We have no missing values, but have many outliers
   
   dim(test_data_x)
   dim(test_data_y)
+  
+  # preprocess by outcome value
+  preprocess <- function(data_x, data_y_type, 
+                          class1="Positive", class2="Negative") {
+    idxes = which(data_y_type %in% c(class1, class2))
+    x = data_x[idxes, ]
+    y = data_y_type[idxes]
+    # class1 = 1, class2 = 0
+    y = as.factor(y)
+    y = as.numeric(y) - 1
+    print(dim(x))
+    print(length(y))
+  
+    return(list("x" = x,  "y" = y))
+  }
+
 ```
 
 ## Build a classification model to predict PR.Status. 
 
 ```{r}
-  # preprocess by outcome value
-  idxes = which(train_data$PR.Status %in% c("Positive", "Negative"))
-  train_x_pr = train_data_x[idxes, ]
-  train_y_pr = train_data_y$histological.type[idxes]
-  # infiltrating lobular carcinoma = 1, infiltrating ductal carcinoma = 0
-  train_y_pr = as.factor(train_y_pr)
-  train_y_pr = as.numeric(train_y_pr) - 1
-  dim(train_x_pr)
-  length(train_y_pr)
-  
-  # preprocess by outcome value
-  idxes = which(test_data_y$PR.Status %in% c("Positive", "Negative"))
-  test_x_pr = test_data_x[idxes, ]
-  test_y_pr = test_data_y$histological.type[idxes]
-  # infiltrating lobular carcinoma = 1, infiltrating ductal carcinoma = 0
-  test_y_pr = as.factor(test_y_pr)
-  test_y_pr = as.numeric(test_y_pr) - 1
-  dim(test_x_pr)
-  length(test_y_pr)
+  pr_data_train = preprocess(train_data_x, train_data_y$PR.Status)
+  pr_data_test = preprocess(test_data_x, test_data_y$PR.Status)
 ```
 
 ```{r}
@@ -141,84 +141,150 @@ We have no missing values, but have many outliers
 ## Build a classification model to predict histological.type 
 
 ```{r}
-  # preprocess by outcome value
-  idxes = which(train_data_y$histological.type %in% c("infiltrating lobular carcinoma", 
-                                                      "infiltrating ductal carcinoma"))
-  train_x_hist = train_data_x[idxes, ]
-  train_y_hist = train_data_y$histological.type[idxes]
-  # infiltrating lobular carcinoma = 1, infiltrating ductal carcinoma = 0
-  train_y_hist = as.factor(train_y_hist)
-  train_y_hist = as.numeric(train_y_hist) - 1
-  dim(train_x_hist)
-  length(train_y_hist)
-  
-  # preprocess by outcome value
-  idxes = which(test_data_y$histological.type %in% c("infiltrating lobular carcinoma", 
-                                                      "infiltrating ductal carcinoma"))
-  test_x_hist = test_data_x[idxes, ]
-  test_y_hist = test_data_y$histological.type[idxes]
-  # infiltrating lobular carcinoma = 1, infiltrating ductal carcinoma = 0
-  test_y_hist = as.factor(test_y_hist)
-  test_y_hist = as.numeric(test_y_hist) - 1
-  dim(test_x_hist)
-  length(test_y_hist)
+  hist_data_train = preprocess(train_data_x, 
+                          train_data_y$histological.type, 
+                          class1 = "infiltrating lobular carcinoma", 
+                          class2 = "infiltrating ductal carcinoma")
+  hist_data_test = preprocess(test_data_x, 
+                          test_data_y$histological.type,
+                          class1 = "infiltrating lobular carcinoma", 
+                          class2 = "infiltrating ductal carcinoma")
 ```
 ### Approach 1 (Logistic Regression)
 ```{r}
   ## Approach 1 (should be different from the PR.Status models)
-  logistic.fit <- glm(train_y_hist~., 
-                      data = data.frame(train_x_hist), family = binomial)
-  pred = predict(logistic.fit, newdata = test_x_hist, type = "response") 
+  logistic.fit <- glm(hist_data_train$y~., 
+                      data = data.frame(hist_data_train$x), family = binomial)
+  pred = predict(logistic.fit, newdata = hist_data_test$x, type = "response") 
   # Use AUC as the evaluation criterion.
   library(ROCR)
-  roc <- prediction(pred, test_y_hist)
+  roc <- prediction(pred, hist_data_test$y)
   performance(roc, measure = "auc")@y.values[[1]]
 
   # You need to provide sufficient information (table, figure and descriptions) to demonstrate the model fitting results
-  table(pred > 0.5, test_y_hist)
+  table(pred > 0.5, hist_data_test$y)
 ```
 
 ### Approach 2 (SVM)
 
 ```{r}
   library(e1071)
-  svm.fit <- svm(train_y_hist ~ ., 
-                  data = data.frame(train_x_hist), 
+  svm.fit <- svm(hist_data$train_y ~ ., 
+                  data = data.frame(hist_data_train$x), 
                   type='C-classification',
                   probability = TRUE,
                   kernel='linear', scale=FALSE, cost = 1)
   
-  pred = predict(svm.fit, test_x_hist, probability=TRUE) # confusion table
+  pred = predict(svm.fit, hist_data_test$x, probability=TRUE) # confusion table
   pred_prob = attr(pred, "probabilities")
   
   # Use AUC as the evaluation criterion.
-  roc <- prediction(pred_prob[,2], test_y_hist)
+  roc <- prediction(pred_prob[,2], hist_data_test$y)
   performance(roc, measure = "auc")@y.values[[1]]
   
   # You need to provide sufficient information (table, figure and descriptions) to demonstrate the model fitting results
-  table(pred_prob[,2] > 0.5, test_y_hist)
+  table(pred_prob[,2] > 0.5, hist_data_test$y)
 ```
 
 ## Variable selection for all outcomes
 
 ```{r}
   # preprocess by outcome value
+  pr_data = preprocess(data_x, data_y$PR.Status)
 
+  er_data = preprocess(data_x, data_y$ER.Status)
+
+  her_data = preprocess(data_x, data_y$HER2.Final.Status)
+  
+  hist_data = preprocess(data_x, data_y$histological.type,
+                          class1 = "infiltrating lobular carcinoma", 
+                          class2 = "infiltrating ductal carcinoma")
+```
+
+```{r}
   # select a total of 50 variables (You can consider reading relevant papers for this task and help guide your variable selection procedure. This means that your final model does not need to be completely data driven. It can be partially knowledge driven. If you do so, please clearly document your procedure, and you should also mention them in the literature review.)
+  library(randomForest)
+  rf.fit_pr = randomForest(pr_data$x, pr_data$y, ntree = 1000, 
+                        mtry = 7, nodesize = 100, sampsize = 300)
+  rf.fit_er = randomForest(er_data$x, er_data$y, ntree = 1000, 
+                        mtry = 7, nodesize = 100, sampsize = 300)
+  rf.fit_her = randomForest(her_data$x, her_data$y, ntree = 1000, 
+                        mtry = 7, nodesize = 100, sampsize = 300)
+  rf.fit_hist = randomForest(hist_data$x, hist_data$y, ntree = 1000, 
+                        mtry = 7, nodesize = 100, sampsize = 300)
+  total_importance = rf.fit_pr$importance + rf.fit_er$importance 
+                      + rf.fit_her$importance + rf.fit_hist$importance
+  idxes = sort(total_importance, decreasing = TRUE, index.return=TRUE)$ix[1:50]
+  pr_data$x = pr_data$x[idxes]
+  er_data$x = er_data$x[idxes]
+  her_data$x = her_data$x[idxes]
+  hist_data$x = hist_data$x[idxes]
+  dim(pr_data$x)
+  dim(er_data$x)
+  dim(her_data$x)
+  dim(hist_data$x)
+```
 
+```{r}
   # build models using only these variables to predict all four outcomes
   
   ## PR.Status
+  library(caret)
+  tunegrid <- expand.grid(mtry = c(5,10,50),min.node.size = c(1,5,10),splitrule = "gini")
+  ctrl <- trainControl(method = "cv", number = 3)
+  rf.fit = train(y=as.factor(pr_data$y), 
+                    x = pr_data$x, method = 'ranger', 
+                    trControl = ctrl, num.trees = 400, tuneGrid = tunegrid,
+                    respect.unordered.factors = "partition")
+  rf.fit
+  pred = predict(rf.fit, pr_data$x)
+  table(pred, pr_data$y)
+```
 
-
+```{r}
   ## ER.Status
+  library(caret)
+  tunegrid <- expand.grid(mtry = c(5,10,50), min.node.size = c(1,5,10), splitrule = "gini")
+  ctrl <- trainControl(method = "cv", number = 3)
+  rf.fit = train(y=as.factor(er_data$y), 
+                    x = er_data$x, method = 'ranger', 
+                    trControl = ctrl, num.trees = 400, tuneGrid = tunegrid,
+                    respect.unordered.factors = "partition")
+  rf.fit
+  pred = predict(rf.fit, er_data$x)
+  table(pred, er_data$y)
+```
 
-
+```{r}
   ## HER2.Final.Status
+  library(caret)
+  tunegrid <- expand.grid(mtry = c(5,10,50),min.node.size = c(1,5,10),splitrule = "gini")
+  ctrl <- trainControl(method = "cv", number = 3)
+  rf.fit = train(y=as.factor(her_data$y), 
+                    x = her_data$x, method = 'ranger', 
+                    trControl = ctrl, num.trees = 400, tuneGrid = tunegrid,
+                    respect.unordered.factors = "partition")
+  rf.fit
+  pred = predict(rf.fit, her_data$x)
+  table(pred, her_data$y)
+```
 
-
+```{r}
   ## histological.type
+  library(caret)
+  tunegrid <- expand.grid(mtry = c(5,10,50),min.node.size = c(1,5,10),splitrule = "gini")
+  ctrl <- trainControl(method = "cv", number = 3)
+  rf.fit = train(y=as.factor(hist_data$y), 
+                    x = hist_data$x, method = 'ranger', 
+                    trControl = ctrl, num.trees = 400, tuneGrid = tunegrid,
+                    respect.unordered.factors = "partition")
+  rf.fit
+  pred = predict(rf.fit, hist_data$x)
+  table(pred, hist_data$y)
+```
 
+
+```{r}
 
   # evaluation criteria is based on a three-fold cross-validation with AUC for each outcome, and then average the cross-validated AUC of all four outcomes
   
