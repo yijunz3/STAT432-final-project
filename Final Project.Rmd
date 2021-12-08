@@ -8,6 +8,12 @@ author: Yijun Zhao (yijunz3), Peiyi Chen (peiyic2), Rongxin Ni (rni4)
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+```{r}
+library(dplyr)
+library(tidyselect)
+```
+
+
 ## Readin the Data
 
 ```{r}
@@ -41,6 +47,41 @@ knitr::opts_chunk$set(echo = TRUE)
   summary
 ```
 
+Based on the description of data, we realize that there are four different omics data types: cn-copy number variations (n=860), mu-mutations (n=249), rs-gene expression (n=604) and pp-protein levels (n=223). Variables in the types of rs and pp are continous, while the rest of variables are categorical.
+
+```{r}
+data_continous = data_x %>%
+  select(matches("rs_"),matches("pp_"))
+
+data_cat = data_rs = data_x %>%
+  select(matches("mu_"),matches("cn_"))
+
+dim(data_continous)
+dim(data_cat)
+```
+
+```{r}
+# For continuous predictors, is there any outlier/missing value? Do you need to do any transformations?
+
+#Check for missing values, 需要注意的是，不确定0是不是missing value
+sum(is.na(data_continous))
+
+#Check for outlier values
+length(boxplot(data_continous)$out)
+
+
+
+```
+
+```{r}
+#Check the histogram of first 10 continuous variables
+for (i in 1:10) {
+  hist(log(data_continous[,i]), xlab = colnames(data_continous)[i])
+}
+
+```
+
+
 ```{r}
   # For continuous predictors, is there any outlier/missing value? Do you need to do any transformations?
   # which(colnames(data_x) == "cn_ISG15")
@@ -63,12 +104,25 @@ knitr::opts_chunk$set(echo = TRUE)
     continuous_data[,i] <- log(shift + continuous_data[,i])
   }
   data_x = continuous_data
+  
+  
 ```
-We have no missing values, but have many outliers
+
+We have no missing values, but have many outliers. We would consider remove variables with too many outliers. 
+
+There also exists many unbalanced categorical data, see the following examples.
 
 ```{r}
   # For categorical predictors, do you need to deal with variables that are extremely unbalanced?
-  categorical_data = data_x[,605:1936]
+  #categorical_data = data_x[,605:1936]
+  for (i in 1:10){
+    print(table(data_cat[,i]))
+    
+  }
+
+#We can try to deal with the first unbalanced variable
+
+
 ```
 
 ```{r}
@@ -115,26 +169,50 @@ We have no missing values, but have many outliers
 
 ## Build a classification model to predict PR.Status. 
 
+Let's first take a look of the data.
+
+```{r}
+#data_pr = data %>%
+  #select(-c('ER.Status'))
+
+table(data$PR.Status)
+```
+
+There exists 122 missing values should be removed, classes "Indeterminate", "Not Performed" and "Performed but Not Available" contain few value, so we will only focus on classes "Positive" and "Negative". 
+
 ```{r}
   pr_data_train = preprocess(train_data_x, train_data_y$PR.Status)
   pr_data_test = preprocess(test_data_x, test_data_y$PR.Status)
-```
-
-```{r}
-  ## Approach 1
-
-  # Use classification error as the evaluation criterion.
   
+```
+
+
+### Approach 1 (lda)
+```{r}
+
+library(MASS)
+dig.lda = lda(pr_data_train$x,pr_data_train$y)
+  # Use classification error as the evaluation criterion.
+Ytest.pred = predict(dig.lda, pr_data_test$x)
+mean(pr_data_test$y != Ytest.pred$class)  
   # You need to provide sufficient information (table, figure and descriptions) to demonstrate the model fitting results
+table(pr_data_test$y, Ytest.pred$class)
 
 ```
 
+### Approach 2 (Kmeans)
 ```{r}
-  ## Approach 2
+
+set.seed(12345)
+pr_mat_train = cbind(pr_data_train$x,pr_data_train$y)
+kmeanfit <- kmeans(pr_mat_train[,-1], 2)
+
 
   # Use classification error as the evaluation criterion.
+mean((pr_mat_train$`pr_data_train$y` + 1) != kmeanfit$cluster)
 
   # You need to provide sufficient information (table, figure and descriptions) to demonstrate the model fitting results
+table(pr_mat_train$`pr_data_train$y`, kmeanfit$cluster)
 
 ```
 
