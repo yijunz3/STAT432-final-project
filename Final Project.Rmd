@@ -53,15 +53,14 @@ According to the article "Comprehensive Molecular Portraits of Invasive Lobular 
 
 ```{r}
 data_continous = data_x %>%
-  select(matches("rs_"),matches("pp_"))
+  dplyr::select(matches("rs_"),matches("pp_"))
 
-list = c('mu_PIK3CA','mu_RUNX1','mu_CDH1','mu_TP53','mu_TBX3','mu_PTEN','mu_FOXA1','mu_MAP3K1','mu_GATA3','mu_AKT1',"mu_NBL1",'mu_KMT2C','mu_DCTD','mu_RB1','mu_SF3B1','mu_CBFB','mu_ARHGAP35','mu_OR9A2','mu_NCOA3','mu_RBMX','mu_MAP2K4','mu_TROVE2','mu_NADK','mu_CASP8','mu_CTSS','mu_ACTL6B','mu_LGALS1','mu_KRAS','mu_KCNN3','mu_FBXW7','mu_LRIG2','mu_PIK3R1','mu_PARP4',')
+list = c('mu_PIK3CA','mu_RUNX1','mu_CDH1','mu_TP53','mu_TBX3','mu_PTEN','mu_FOXA1','mu_MAP3K1','mu_GATA3','mu_AKT1',"mu_NBL1",'mu_KMT2C','mu_DCTD','mu_RB1','mu_SF3B1','mu_CBFB','mu_ARHGAP35','mu_OR9A2','mu_NCOA3','mu_RBMX','mu_MAP2K4','mu_TROVE2','mu_NADK','mu_CASP8','mu_CTSS','mu_ACTL6B','mu_LGALS1','mu_KRAS','mu_KCNN3','mu_FBXW7','mu_LRIG2','mu_PIK3R1','mu_PARP4','mu_ZNF28','mu_HLA-DRB1','mu_ERBB2','mu_ZMYM3','mu_RAB42','mu_CTCF','mu_ATAD2','mu_CDKN1B','mu_GRIA2','mu_NCOR1','mu_HRNR','mu_GPRIN2','mu_PAX2','mu_ACTG1','mu_AQP12A','mu_PIK3C3','mu_MYB','mu_IRS4','mu_TBL1XR1','mu_RPGR','mu_CCNI','mu_ARID1A','mu_CD3EAP','mu_ADAMTS6','mu_OR2D2','mu_TMEM199','mu_MST1','mu_RHBG','mu_ZFP36L1','mu_TCP11','mu_CASZ1','mu_GAL3ST1','mu_FRMPD2','mu_GPS2','mu_ZNF362')
 
 data_cat_1 = data_x %>%
-  dplyr::select(list)
-data_cat_1 = 
+  dplyr::select(matches(list))
 data_cat_2 = data_x %>%
-  select(matches("cn_"))
+  dplyr::select(matches("cn_"))
 
 data_cat = cbind(data_cat_1,data_cat_2)
 dim(data_continous)
@@ -77,11 +76,20 @@ dim(data_cat)
 sum(is.na(data_continous))
 
 #Check for outlier values
+outliers = boxplot(data_continous)$out
 length(boxplot(data_continous)$out)
 
 
+```
+
+We have no missing values, but many outliers. We would consider remove these outliers. 
+
+```{r}
 
 ```
+
+
+Next, we will check the distribution of continuous variables.
 
 ```{r}
 #Check the histogram of first and last 5 continuous variables
@@ -93,37 +101,41 @@ for (i in c(1:5,822:827)) {
 
 Although some variables are skewed, we can observe that the majority of variables are normally distributed. Therefore, transformation is unnecessary.
 
+We will also check the correlation between continuous variables and
+
+
 ```{r}
   # For continuous predictors, is there any outlier/missing value? Do you need to do any transformations?
   # which(colnames(data_x) == "cn_ISG15")
   ### 会hurt performance
-  continuous_data = data_x[1:604]
-  summary = describe(continuous_data)
-  skew_idx = which(abs(summary$skew) > 1)
-  length(skew_idx)
+  #continuous_data = data_x[1:604]
+  #summary = describe(continuous_data)
+  #skew_idx = which(abs(summary$skew) > 1)
+  #length(skew_idx)
   # number of missing values
-  nrow(continuous_data) - nrow(na.omit(continuous_data)) 
+  #nrow(continuous_data) - nrow(na.omit(continuous_data)) 
   # number of outlier values
-  length(boxplot(continuous_data)$out)
+  #length(boxplot(continuous_data)$out)
   
-  for (i in skew_idx) {
-    shift = 0
-    if (summary$min[i] <= 0) {
-      shift = 1
-    }
+  #for (i in skew_idx) {
+    #shift = 0
+    #if (summary$min[i] <= 0) {
+      #shift = 1
+    #}
     #hist(continuous_data[,i], breaks = 10, main = colnames(continuous_data)[i])
-    continuous_data[,i] <- log(shift + continuous_data[,i])
-  }
-  data_x = continuous_data
+    #continuous_data[,i] <- log(shift + continuous_data[,i])
+  #}
+  data_x = cbind(data_continous,data_cat)
+dim(data_y)
   
   
 ```
 
-We have no missing values, but have many outliers. We would consider remove variables with too many outliers. 
 
 There also exists many unbalanced categorical data, see the following examples.
 
 ```{r}
+
   # For categorical predictors, do you need to deal with variables that are extremely unbalanced?
   #categorical_data = data_x[,605:1936]
   for (i in 1:10){
@@ -148,6 +160,7 @@ There also exists many unbalanced categorical data, see the following examples.
 ```
 
 ```{r}
+  data_x = cbind(data_continous,data_cat)
   # separate train & test data
   set.seed(12345)
   # 75% of the sample size
@@ -241,6 +254,7 @@ table(pr_mat_train$`pr_data_train$y`, kmeanfit$cluster)
                           test_data_y$histological.type,
                           class1 = "infiltrating lobular carcinoma", 
                           class2 = "infiltrating ductal carcinoma")
+  
 ```
 ### Approach 1 (Logistic Regression)
 ```{r}
@@ -261,7 +275,7 @@ table(pr_mat_train$`pr_data_train$y`, kmeanfit$cluster)
 
 ```{r}
   library(e1071)
-  svm.fit <- svm(hist_data$train_y ~ ., 
+  svm.fit <- svm(hist_data_train$y ~ ., 
                   data = data.frame(hist_data_train$x), 
                   type='C-classification',
                   probability = TRUE,
@@ -277,6 +291,7 @@ table(pr_mat_train$`pr_data_train$y`, kmeanfit$cluster)
   # You need to provide sufficient information (table, figure and descriptions) to demonstrate the model fitting results
   table(pred_prob[,2] > 0.5, hist_data_test$y)
 ```
+
 
 ## Variable selection for all outcomes
 
