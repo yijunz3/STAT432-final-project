@@ -49,16 +49,26 @@ library(tidyselect)
 
 Based on the description of data, we realize that there are four different omics data types: cn-copy number variations (n=860), mu-mutations (n=249), rs-gene expression (n=604) and pp-protein levels (n=223). Variables in the types of rs and pp are continous, while the rest of variables are categorical.
 
+According to the article "Comprehensive Molecular Portraits of Invasive Lobular Breast Cancer", we know that mutations PTEN, TBX3, and FOXA1 are ILC enriched features, so these variables should definitely be included in our dataset. Moreover, there are Recurrently Mutated Genes in Breast Cancer given by this article, which should also be considered. We can remove other unrelated variables.
+
 ```{r}
 data_continous = data_x %>%
   select(matches("rs_"),matches("pp_"))
 
-data_cat = data_rs = data_x %>%
-  select(matches("mu_"),matches("cn_"))
+list = c('mu_PIK3CA','mu_RUNX1','mu_CDH1','mu_TP53','mu_TBX3','mu_PTEN','mu_FOXA1','mu_MAP3K1','mu_GATA3','mu_AKT1',"mu_NBL1",'mu_KMT2C','mu_DCTD','mu_RB1','mu_SF3B1','mu_CBFB','mu_ARHGAP35','mu_OR9A2','mu_NCOA3','mu_RBMX','mu_MAP2K4','mu_TROVE2','mu_NADK','mu_CASP8','mu_CTSS','mu_ACTL6B','mu_LGALS1','mu_KRAS','mu_KCNN3','mu_FBXW7','mu_LRIG2','mu_PIK3R1','mu_PARP4',')
 
+data_cat_1 = data_x %>%
+  dplyr::select(list)
+data_cat_1 = 
+data_cat_2 = data_x %>%
+  select(matches("cn_"))
+
+data_cat = cbind(data_cat_1,data_cat_2)
 dim(data_continous)
 dim(data_cat)
 ```
+
+
 
 ```{r}
 # For continuous predictors, is there any outlier/missing value? Do you need to do any transformations?
@@ -74,13 +84,14 @@ length(boxplot(data_continous)$out)
 ```
 
 ```{r}
-#Check the histogram of first 10 continuous variables
-for (i in 1:10) {
-  hist(log(data_continous[,i]), xlab = colnames(data_continous)[i])
+#Check the histogram of first and last 5 continuous variables
+for (i in c(1:5,822:827)) {
+  hist(data_continous[,i], xlab = colnames(data_continous)[i])
 }
 
 ```
 
+Although some variables are skewed, we can observe that the majority of variables are normally distributed. Therefore, transformation is unnecessary.
 
 ```{r}
   # For continuous predictors, is there any outlier/missing value? Do you need to do any transformations?
@@ -125,8 +136,12 @@ There also exists many unbalanced categorical data, see the following examples.
 
 ```
 
+
+
 ```{r}
   # Any variable/observation you decided to remove from the analysis? And for what reason?
+
+
 
   # You need to provide tables and/or figures to properly display the information to support your decision and clearly document your processing steps.
 
@@ -202,7 +217,6 @@ table(pr_data_test$y, Ytest.pred$class)
 
 ### Approach 2 (Kmeans)
 ```{r}
-
 set.seed(12345)
 pr_mat_train = cbind(pr_data_train$x,pr_data_train$y)
 kmeanfit <- kmeans(pr_mat_train[,-1], 2)
