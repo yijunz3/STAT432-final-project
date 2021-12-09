@@ -35,7 +35,6 @@ library(tidyselect)
                                                histological.type))
   dim(data_x)
   dim(data_y)
-  data_y
 ```
 
 ## Summary Statistics and data processing
@@ -126,7 +125,7 @@ We will also check the correlation between continuous variables and
     #continuous_data[,i] <- log(shift + continuous_data[,i])
   #}
   data_x = cbind(data_continous,data_cat)
-dim(data_y)
+dim(data_x)
   
   
 ```
@@ -256,16 +255,21 @@ table(pr_mat_train$`pr_data_train$y`, kmeanfit$cluster)
   
 ```
 ### Approach 1 (Logistic Regression)
+
 ```{r}
-  ## Approach 1 (should be different from the PR.Status models)
-  logistic.fit <- glm(hist_data_train$y~., 
-                      data = data.frame(hist_data_train$x), family = binomial)
-  pred = predict(logistic.fit, newdata = hist_data_test$x, type = "response") 
+  library(glmnet)
+  logistic.fit <- glmnet(hist_data_train$x, hist_data_train$y, alpha = 0, family = "binomial")
+  pred = predict(logistic.fit, data.matrix(hist_data_test$x), type = "response", s=min(fit$lambda))
+  
   # Use AUC as the evaluation criterion.
   library(ROCR)
   roc <- prediction(pred, hist_data_test$y)
   performance(roc, measure = "auc")@y.values[[1]]
-
+  
+  # calculates the ROC curve
+  perf <- performance(roc,"tpr","fpr")
+  plot(perf,colorize=TRUE)
+  
   # You need to provide sufficient information (table, figure and descriptions) to demonstrate the model fitting results
   table(pred > 0.5, hist_data_test$y)
 ```
@@ -274,23 +278,26 @@ table(pr_mat_train$`pr_data_train$y`, kmeanfit$cluster)
 
 ```{r}
   library(e1071)
-  svm.fit <- svm(hist_data_train$y ~ ., 
+  svm.fit <- svm(as.factor(hist_data_train$y) ~ ., 
                   data = data.frame(hist_data_train$x), 
                   type='C-classification',
                   probability = TRUE,
                   kernel='linear', scale=FALSE, cost = 1)
   
-  pred = predict(svm.fit, hist_data_test$x, probability=TRUE) # confusion table
+  pred = predict(svm.fit, hist_data_test$x, probability=TRUE)
   pred_prob = attr(pred, "probabilities")
   
   # Use AUC as the evaluation criterion.
   roc <- prediction(pred_prob[,2], hist_data_test$y)
   performance(roc, measure = "auc")@y.values[[1]]
   
+  # calculates the ROC curve
+  perf <- performance(roc,"tpr","fpr")
+  plot(perf,colorize=TRUE)
+  
   # You need to provide sufficient information (table, figure and descriptions) to demonstrate the model fitting results
   table(pred_prob[,2] > 0.5, hist_data_test$y)
 ```
-
 
 ## Variable selection for all outcomes
 
@@ -308,18 +315,36 @@ table(pr_mat_train$`pr_data_train$y`, kmeanfit$cluster)
 ```
 
 ```{r}
-  # select a total of 50 variables (You can consider reading relevant papers for this task and help guide your variable selection procedure. This means that your final model does not need to be completely data driven. It can be partially knowledge driven. If you do so, please clearly document your procedure, and you should also mention them in the literature review.)
+  # tune rf parameters
+  library(caret)
+  tunegrid <- expand.grid(mtry = c(50, 100, 500, 700),min.node.size = c(1,5,10,20),
+                          splitrule = "gini")
+  ctrl <- trainControl(method = "cv", number = 3)
+  rf.fit = train(y=as.factor(hist_data$y), 
+                    x = hist_data$x, method = 'ranger', 
+                    trControl = ctrl, num.trees = 400, tuneGrid = tunegrid,
+                    respect.unordered.factors = "partition")
+  rf.fit
+  pred = predict(rf.fit, hist_data$x)
+  
+  roc <- prediction(as.numeric(pred), as.numeric(hist_data$y))
+  performance(roc, measure = "auc")@y.values[[1]]
+  
+  table(pred, hist_data$y)
+```
+
+```{r}
+  # select a total of 50 variables
   library(randomForest)
-  rf.fit_pr = randomForest(pr_data$x, pr_data$y, ntree = 1000, 
-                        mtry = 7, nodesize = 100, sampsize = 300)
-  rf.fit_er = randomForest(er_data$x, er_data$y, ntree = 1000, 
-                        mtry = 7, nodesize = 100, sampsize = 300)
-  rf.fit_her = randomForest(her_data$x, her_data$y, ntree = 1000, 
-                        mtry = 7, nodesize = 100, sampsize = 300)
-  rf.fit_hist = randomForest(hist_data$x, hist_data$y, ntree = 1000, 
-                        mtry = 7, nodesize = 100, sampsize = 300)
-  total_importance = rf.fit_pr$importance + rf.fit_er$importance 
-                      + rf.fit_her$importance + rf.fit_hist$importance
+  rf.fit_pr = randomForest(pr_data$x, as.factor(pr_data$y), ntree = 400, 
+                        mtry = 500, nodesize = 1)
+  rf.fit_er = randomForest(er_data$x, as.factor(er_data$y), ntree = 400, 
+                        mtry = 500, nodesize = 1)
+  rf.fit_her = randomForest(her_data$x, as.factor(her_data$y), ntree = 400, 
+                        mtry = 500, nodesize = 1)
+  rf.fit_hist = randomForest(hist_data$x, as.factor(hist_data$y), ntree = 400, 
+                        mtry = 500, nodesize = 1)
+  total_importance = rf.fit_pr$importance + rf.fit_er$importance + rf.fit_her$importance + rf.fit_hist$importance
   idxes = sort(total_importance, decreasing = TRUE, index.return=TRUE)$ix[1:50]
   pr_data$x = pr_data$x[idxes]
   er_data$x = er_data$x[idxes]
@@ -333,19 +358,22 @@ table(pr_mat_train$`pr_data_train$y`, kmeanfit$cluster)
 
 ```{r}
   # evaluation criteria is based on a three-fold cross-validation with AUC for each outcome, and then average the cross-validated AUC of all four outcomes
-  eval <- function(data_x, data_y, folds) {
+  set.seed(1)
+  all_fold_ids = sample(1:3, 705, replace = TRUE)
+  
+  eval <- function(data_x, data_y, fold_ids) {
     auc_list = c()
     for (i in 1:3) {
-      test_idxes <- which(folds==i, arr.ind=TRUE)
+      test_idxes <- which(fold_ids==i)
       test_x <- data_x[test_idxes,]
       test_y <- data_y[test_idxes]
       train_x <- data_x[-test_idxes,]
       train_y <- data_y[-test_idxes]
+
+      fit <- glmnet(train_x, as.factor(train_y), alpha = 0, family = "binomial")
+      pred = predict(fit, data.matrix(test_x), type = "response", s=min(fit$lambda))
+      roc <- prediction(pred, test_y)
       
-      rf.fit = randomForest(train_x, train_y, ntree = 1000, 
-                        mtry = 7, nodesize = 100, sampsize = 300)
-      pred = predict(rf.fit, test_x)
-      roc <- prediction(as.numeric(pred), as.numeric(test_y))
       auc <- performance(roc, measure = "auc")@y.values[[1]]
       auc_list = c(auc_list, auc)
     }
@@ -359,15 +387,21 @@ table(pr_mat_train$`pr_data_train$y`, kmeanfit$cluster)
   # must generate the fold ID (for all 705 observations) using the following code
   set.seed(1)
   fold_id_list = sample(1:3, 705, replace = TRUE)
-  pr_auc = eval(pr_data$x, pr_data$y, fold_id_list[pr_data$idxes])
-  pr_auc
-  er_auc = eval(er_data$x, er_data$y, fold_id_list[er_data$idxes])
-  er_auc
-  her_auc = eval(her_data$x, her_data$y, fold_id_list[her_data$idxes])
-  her_auc
-  hist_auc = eval(hist_data$x, hist_data$y, fold_id_list[hist_data$idxes])
-  hist_auc
+  
+  pr_auc = eval(pr_data$x, pr_data$y, all_fold_ids[pr_data$idxes])
+  er_auc = eval(er_data$x, er_data$y, all_fold_ids[er_data$idxes])
+  her_auc = eval(her_data$x, her_data$y, all_fold_ids[her_data$idxes])
+  hist_auc = eval(hist_data$x, hist_data$y, all_fold_ids[hist_data$idxes])
   
   res = mean(c(pr_auc, hist_auc, er_auc, her_auc))
+  
+  pr_auc
+  er_auc
+  her_auc
+  hist_auc
   res
+```
+
+```{r}
+  colnames(pr_data$x)  
 ```
