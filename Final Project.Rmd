@@ -259,7 +259,7 @@ table(pr_mat_train$`pr_data_train$y`, kmeanfit$cluster)
 ```{r}
   library(glmnet)
   logistic.fit <- glmnet(hist_data_train$x, hist_data_train$y, alpha = 0, family = "binomial")
-  pred = predict(logistic.fit, data.matrix(hist_data_test$x), type = "response", s=min(fit$lambda))
+  pred = predict(logistic.fit, data.matrix(hist_data_test$x), type = "response", s=min(logistic.fit$lambda))
   
   # Use AUC as the evaluation criterion.
   library(ROCR)
