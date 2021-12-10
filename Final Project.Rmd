@@ -228,7 +228,7 @@ Ytest.pred = predict(dig.lda, pr_data_test$x)
 mean(pr_data_test$y != Ytest.pred$class)  
 
   # You need to provide sufficient information (table, figure and descriptions) to demonstrate the model fitting results
-table(pr_data_test$y, Ytest.pred$class)
+table(Ytest.pred$class, pr_data_test$y)
 
 ```
 
@@ -236,15 +236,19 @@ table(pr_data_test$y, Ytest.pred$class)
 ```{r}
 set.seed(12345)
 pr_mat_train = cbind(pr_data_train$x,pr_data_train$y)
-kmeanfit <- kmeans(pr_mat_train[,-dim(pr_mat_train)[2]],2,25)
+kmeanfit <- kmeans(pr_mat_train[,-dim(pr_mat_train)[2]],2)
 
 
   # Use classification error as the evaluation criterion.
 mean((pr_mat_train$`pr_data_train$y` + 1) != kmeanfit$cluster)
 
   # You need to provide sufficient information (table, figure and descriptions) to demonstrate the model fitting results
-table(pr_mat_train$`pr_data_train$y`, kmeanfit$cluster)
+table(kmeanfit$cluster, pr_mat_train$`pr_data_train$y`)
 
+```
+
+```{r}
+table(pr_data_test$y)
 ```
 
 
@@ -343,13 +347,13 @@ table(pr_mat_train$`pr_data_train$y`, kmeanfit$cluster)
   # select a total of 50 variables
 
   rf.fit_pr = randomForest(pr_data$x, as.factor(pr_data$y), ntree = 400, 
-                        mtry = 500, nodesize = 1)
+                        mtry = 500, nodesize = 10)
   rf.fit_er = randomForest(er_data$x, as.factor(er_data$y), ntree = 400, 
-                        mtry = 500, nodesize = 1)
+                        mtry = 500, nodesize = 10)
   rf.fit_her = randomForest(her_data$x, as.factor(her_data$y), ntree = 400, 
-                        mtry = 500, nodesize = 1)
+                        mtry = 500, nodesize = 10)
   rf.fit_hist = randomForest(hist_data$x, as.factor(hist_data$y), ntree = 400, 
-                        mtry = 500, nodesize = 1)
+                        mtry = 500, nodesize = 10)
   total_importance = rf.fit_pr$importance + rf.fit_er$importance + rf.fit_her$importance + rf.fit_hist$importance
   idxes = sort(total_importance, decreasing = TRUE, index.return=TRUE)$ix[1:50]
   pr_data$x = pr_data$x[idxes]
