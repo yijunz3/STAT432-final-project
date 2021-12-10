@@ -128,28 +128,38 @@ data_continous <- scale(data_continous, center = TRUE, scale = TRUE)
 ```
 
 
-There also exists many unbalanced categorical data, see the following examples.
+Covariate imbalance may introduces bias into our model. We want to remove those extremely imbalanced classes (that is, the ratio between this class with others is over 10). From the previous result, we only want to keep classes 1,-1 and 0 for variables in the type "cn".
+
+Let's look at the variables in the type "mu". Since they only have two classes 0 and 1, we will look for the ratio of these two classes in each variable, and then remove the ones that are very imbalanced.
+
+```{r}
+data_mu = data_cat %>%
+  dplyr::select(matches("mu_"))
+
+list_remove = c()
+for (i in 1:dim(data_mu)[2]){
+  if ((table(data_mu[,i])[1]/table(data_mu[,i])[2]) > 45){
+      list_remove = append(list_remove,i)
+  }
+}
+
+list_remove = colnames(data_mu)[list_remove]
+```
+
+
+```{r}
+length(list_remove)
+list_remove
+```
 
 ```{r}
 
-  # For categorical predictors, do you need to deal with variables that are extremely unbalanced?
-  #categorical_data = data_x[,605:1936]
-  sum = 0
-  for (i in (1:dim(data_cat)[2])){
-    sum = sum + (table(data_cat[,i])[1] / table(data_cat[,i])[2] > 2)
-    
-  }
+#data_cn = data_cat %>%
+  #dplyr::select(matches("cn_"))
 
-sum
-
-#We can try to deal with the first unbalanced variable
-
- for (i in (1:20)){
-    print(table(data_cat[,i])[1] / table(data_cat[,i])[2])
-    
-  }
+data_cat = data_cat[,-which(colnames(data_cat) %in% list_remove)]
+dim(data_cat)
 ```
-
 
 
 ```{r}
@@ -226,7 +236,7 @@ table(pr_data_test$y, Ytest.pred$class)
 ```{r}
 set.seed(12345)
 pr_mat_train = cbind(pr_data_train$x,pr_data_train$y)
-kmeanfit <- kmeans(pr_mat_train[,-1611],2,25)
+kmeanfit <- kmeans(pr_mat_train[,-dim(pr_mat_train)[2]],2,25)
 
 
   # Use classification error as the evaluation criterion.
