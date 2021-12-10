@@ -9,8 +9,16 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r}
+#Used packages
 library(dplyr)
 library(tidyselect)
+library(psych)
+library(MASS)
+library(glmnet)
+library(ROCR)
+library(e1071)
+library(caret)
+library(randomForest)
 ```
 
 
@@ -18,15 +26,17 @@ library(tidyselect)
 
 ```{r}
   dataset = read.csv("brca_data_w_subtypes.csv")
-  dataset
+  str(dataset)
+  dim(dataset)
 ```
 
+From the result, we know the data set contains 1941 variables and 705 observations.
+
 ```{r}
-  dim(dataset)
   # discard the vital.status variable
   data = subset(dataset, select = c(-vital.status))
   
-  # separate outcomes from the training variables
+  # separate outcomes from the data
   data_x = subset(data, select = c(-PR.Status, -ER.Status, 
                                                -HER2.Final.Status, 
                                                -histological.type))
@@ -41,10 +51,10 @@ library(tidyselect)
 
 ```{r}
   # Provide a summary of your data using univariate analysis
-  library(psych)
   summary = describe(data_x)
   summary
 ```
+
 
 Based on the description of data, we realize that there are four different omics data types: cn-copy number variations (n=860), mu-mutations (n=249), rs-gene expression (n=604) and pp-protein levels (n=223). Variables in the types of rs and pp are continous, while the rest of variables are categorical.
 
@@ -66,42 +76,58 @@ dim(data_continous)
 dim(data_cat)
 ```
 
-
+If skewness is between -0.5 and 0.5, we consider the distribution to be approximately symmetric. Otherwise, if the absolute value of skewness is greater than 1, we consider the distribution to be highly skewed; if the absolute value is between 0.5 and 1, we consider the distribution to be moderately skewed. 
 
 ```{r}
-# For continuous predictors, is there any outlier/missing value? Do you need to do any transformations?
+#Check how many continuous variables are skewed distributed
+summary_continous = describe(data_continous)
+sum(abs(summary_continous$skew) >= 1)
+```
+For these highly skewed variables, we would perform cuberoot transformation, since the data contains both positive, zero and negative values.
 
-#Check for missing values, 需要注意的是，不确定0是不是missing value
+```{r}
+list_skew = which(abs(summary_continous$skew) >= 1)
+data_continous[,list_skew] = data_continous[,list_skew]^(1/3)
+#View(data_continous)
+sum(abs(describe(data_continous)$skew) >= 1)
+```
+For the left 26 variables, we want to remove them.
+
+```{r}
+list_still_skew = which(abs(describe(data_continous)$skew) >= 1)
+data_continous <- data_continous[,-c(list_still_skew)]
+dim(data_continous)
+```
+
+```{r}
+
+#check and remove the variables containing missing values
+list_missing = c()
+for (i in 1:dim(data_continous)[2]){
+  if (sum(is.na(data_continous[,i])) != 0){
+    list_missing <- append(list_missing,i)
+  }
+}
+data_continous <- data_continous[,-c(list_missing)]
 sum(is.na(data_continous))
 
-#Check for outlier values
+#Check for outlier values as well
 outliers = boxplot(data_continous)$out
-length(boxplot(data_continous)$out)
+outlier_num = length(boxplot(data_continous)$out)
+outlier_num
 
+dim(data_continous)
 
 ```
 
-We have no missing values, but many outliers. We would consider remove these outliers. 
+Notice that we have 5823 outliers. However, since those outliers only take 1% of all the values, and we think these outliers are more likely to come from variation instead of typo or incorrect measurement, we decide not to drop them.
 
+We want to standardize our data to make variables comparable.
 ```{r}
-
+data_continous <- scale(data_continous, center = TRUE, scale = TRUE)
 ```
-
-
-Next, we will check the distribution of continuous variables.
-
-```{r}
-#Check the histogram of first and last 5 continuous variables
-for (i in c(1:5,822:827)) {
-  hist(data_continous[,i], xlab = colnames(data_continous)[i])
-}
-
-```
-
-Although some variables are skewed, we can observe that the majority of variables are normally distributed. Therefore, transformation is unnecessary.
 
 We will also check the correlation between continuous variables and
-
 
 ```{r}
   # For continuous predictors, is there any outlier/missing value? Do you need to do any transformations?
@@ -124,7 +150,7 @@ We will also check the correlation between continuous variables and
     #hist(continuous_data[,i], breaks = 10, main = colnames(continuous_data)[i])
     #continuous_data[,i] <- log(shift + continuous_data[,i])
   #}
-  data_x = cbind(data_continous,data_cat)
+data_x = cbind(data_continous,data_cat)
 dim(data_x)
   
   
@@ -137,28 +163,26 @@ There also exists many unbalanced categorical data, see the following examples.
 
   # For categorical predictors, do you need to deal with variables that are extremely unbalanced?
   #categorical_data = data_x[,605:1936]
-  for (i in 1:10){
-    print(table(data_cat[,i]))
+  sum = 0
+  for (i in (1:dim(data_cat)[2])){
+    sum = sum + (table(data_cat[,i])[1] / table(data_cat[,i])[2] > 2)
     
   }
 
+sum
+
 #We can try to deal with the first unbalanced variable
 
-
+ for (i in (1:20)){
+    print(table(data_cat[,i])[1] / table(data_cat[,i])[2])
+    
+  }
 ```
 
 
 
 ```{r}
-  # Any variable/observation you decided to remove from the analysis? And for what reason?
-
-
-
-  # You need to provide tables and/or figures to properly display the information to support your decision and clearly document your processing steps.
-
-```
-
-```{r}
+#Generate the data of covariates
   data_x = cbind(data_continous,data_cat)
   # separate train & test data
   set.seed(12345)
@@ -216,11 +240,12 @@ There exists 122 missing values should be removed, classes "Indeterminate", "Not
 ### Approach 1 (lda)
 ```{r}
 
-library(MASS)
 dig.lda = lda(pr_data_train$x,pr_data_train$y)
+
   # Use classification error as the evaluation criterion.
 Ytest.pred = predict(dig.lda, pr_data_test$x)
 mean(pr_data_test$y != Ytest.pred$class)  
+
   # You need to provide sufficient information (table, figure and descriptions) to demonstrate the model fitting results
 table(pr_data_test$y, Ytest.pred$class)
 
@@ -230,7 +255,7 @@ table(pr_data_test$y, Ytest.pred$class)
 ```{r}
 set.seed(12345)
 pr_mat_train = cbind(pr_data_train$x,pr_data_train$y)
-kmeanfit <- kmeans(pr_mat_train[,-1], 2)
+kmeanfit <- kmeans(pr_mat_train[,-1611],2,25)
 
 
   # Use classification error as the evaluation criterion.
@@ -240,6 +265,7 @@ mean((pr_mat_train$`pr_data_train$y` + 1) != kmeanfit$cluster)
 table(pr_mat_train$`pr_data_train$y`, kmeanfit$cluster)
 
 ```
+
 
 ## Build a classification model to predict histological.type 
 
@@ -257,12 +283,11 @@ table(pr_mat_train$`pr_data_train$y`, kmeanfit$cluster)
 ### Approach 1 (Logistic Regression)
 
 ```{r}
-  library(glmnet)
   logistic.fit <- glmnet(hist_data_train$x, hist_data_train$y, alpha = 0, family = "binomial")
   pred = predict(logistic.fit, data.matrix(hist_data_test$x), type = "response", s=min(logistic.fit$lambda))
   
   # Use AUC as the evaluation criterion.
-  library(ROCR)
+
   roc <- prediction(pred, hist_data_test$y)
   performance(roc, measure = "auc")@y.values[[1]]
   
@@ -277,7 +302,7 @@ table(pr_mat_train$`pr_data_train$y`, kmeanfit$cluster)
 ### Approach 2 (SVM)
 
 ```{r}
-  library(e1071)
+
   svm.fit <- svm(as.factor(hist_data_train$y) ~ ., 
                   data = data.frame(hist_data_train$x), 
                   type='C-classification',
@@ -316,7 +341,7 @@ table(pr_mat_train$`pr_data_train$y`, kmeanfit$cluster)
 
 ```{r}
   # tune rf parameters
-  library(caret)
+
   tunegrid <- expand.grid(mtry = c(50, 100, 500, 700),min.node.size = c(1,5,10,20),
                           splitrule = "gini")
   ctrl <- trainControl(method = "cv", number = 3)
@@ -335,7 +360,7 @@ table(pr_mat_train$`pr_data_train$y`, kmeanfit$cluster)
 
 ```{r}
   # select a total of 50 variables
-  library(randomForest)
+
   rf.fit_pr = randomForest(pr_data$x, as.factor(pr_data$y), ntree = 400, 
                         mtry = 500, nodesize = 1)
   rf.fit_er = randomForest(er_data$x, as.factor(er_data$y), ntree = 400, 
