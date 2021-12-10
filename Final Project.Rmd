@@ -127,35 +127,6 @@ We want to standardize our data to make variables comparable.
 data_continous <- scale(data_continous, center = TRUE, scale = TRUE)
 ```
 
-We will also check the correlation between continuous variables and
-
-```{r}
-  # For continuous predictors, is there any outlier/missing value? Do you need to do any transformations?
-  # which(colnames(data_x) == "cn_ISG15")
-  ### 会hurt performance
-  #continuous_data = data_x[1:604]
-  #summary = describe(continuous_data)
-  #skew_idx = which(abs(summary$skew) > 1)
-  #length(skew_idx)
-  # number of missing values
-  #nrow(continuous_data) - nrow(na.omit(continuous_data)) 
-  # number of outlier values
-  #length(boxplot(continuous_data)$out)
-  
-  #for (i in skew_idx) {
-    #shift = 0
-    #if (summary$min[i] <= 0) {
-      #shift = 1
-    #}
-    #hist(continuous_data[,i], breaks = 10, main = colnames(continuous_data)[i])
-    #continuous_data[,i] <- log(shift + continuous_data[,i])
-  #}
-data_x = cbind(data_continous,data_cat)
-dim(data_x)
-  
-  
-```
-
 
 There also exists many unbalanced categorical data, see the following examples.
 
